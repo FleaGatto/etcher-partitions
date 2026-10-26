@@ -10,6 +10,8 @@ jobs:
     name: balenaEtcher for Windows x64
     runs-on: windows-2022
     timeout-minutes: 350
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
 
@@ -60,3 +62,34 @@ jobs:
             out/make/**/*.zip
             out/make/**/*.nupkg
           if-no-files-found: error
+
+      # Publish the installer on the releases tab, so it can be downloaded
+      # directly instead of as an artifact zip (which needs a GitHub login)
+      - name: Publish installer to releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p 'require("./package.json").version')"
+          tag="v${version}-partitions"
+          setup="$(find out/make -name '*Setup.exe' -print -quit)"
+          test -n "$setup"
+          asset="balenaEtcher-${version}-partitions-win-x64-Setup.exe"
+          cp "$setup" "$asset"
+
+          notes="balenaEtcher ${version} with partition targets: every partition
+          is listed next to the whole drives, and the image is written from the
+          start of the selected partition, leaving the parent drive's partition
+          table and its other partitions untouched.
+
+          Windows x64 installer, unsigned: SmartScreen will warn on first run.
+          Built from ${GITHUB_SHA} by ${GITHUB_WORKFLOW} run ${GITHUB_RUN_ID}."
+
+          if gh release view "$tag" > /dev/null 2>&1; then
+            gh release upload "$tag" "$asset" --clobber
+          else
+            gh release create "$tag" "$asset" \
+              --title "balenaEtcher ${version} (partition targets)" \
+              --notes "$notes"
+          fi
+          gh release view "$tag" --json url --jq .url
