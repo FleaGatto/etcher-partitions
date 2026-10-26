@@ -621,8 +621,13 @@ async function listWindowsPartitions(): Promise<PartitionDrive[]> {
 		const letter = partition.DriveLetter || null;
 		const name =
 			(volume?.FileSystemLabel || partition.Type || '').trim() || 'Partition';
+		// The target list keys its rows by displayName, and the sdk names a whole
+		// drive after its mountpoints on Windows, so a drive whose only mounted
+		// partition is E: is also called `E:\`. Keep the partition's name
+		// distinct from it: colliding names make the two rows share a key, and a
+		// disabled drive then greys out the partition as well.
 		const displayName = letter
-			? `${letter}:\\`
+			? `${letter}:\\ (partition ${partition.PartitionNumber})`
 			: `Disk ${partition.DiskNumber} partition ${partition.PartitionNumber}`;
 
 		result.push({
