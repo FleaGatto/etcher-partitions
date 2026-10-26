@@ -1,0 +1,57 @@
+name: Build Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, master]
+
+jobs:
+  build:
+    name: balenaEtcher for Windows x64
+    runs-on: windows-2022
+    timeout-minutes: 350
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      # Needed by OpenSSL's assembly if pkg ends up building Node.js from source
+      - name: Install NASM
+        shell: pwsh
+        run: |
+          choco install nasm --no-progress -y
+          echo 'C:\Program Files\NASM' >> $env:GITHUB_PATH
+
+      - name: Cache pkg base binaries
+        uses: actions/cache@v4
+        with:
+          path: ~/.pkg-cache
+          key: pkg-cache-windows-x64-${{ hashFiles('forge.pkg-node.ts') }}
+          restore-keys: pkg-cache-windows-x64-
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          # run install scripts one at a time: parallel node-gyp builds racing to
+          # download the same Node.js headers fail on Windows
+          export npm_config_foreground_scripts=true
+          npm ci
+          # the shrinkwrap is generated on linux/mac, so this package is missing
+          npm i -D winusb-driver-generator
+
+      - name: Build installer
+        shell: bash
+        run: npm run make -- --platform win32 --arch x64
+
+      - name: Upload installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: balenaEtcher-partitions-win32-x64
+          path: |
+            out/make/**/*.exe
+            out/make/**/*.zip
+            out/make/**/*.nupkg
+          if-no-files-found: error
