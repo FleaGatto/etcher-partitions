@@ -44,6 +44,11 @@ jobs:
 
       - name: Build installer
         shell: bash
+        env:
+          # The Node.js version forge.pkg-node.ts pins has no prebuilt pkg base
+          # binary, and building it from source takes hours on a runner; 24.20.0
+          # is the newest one pkg-fetch ships (and knows the hash of).
+          ETCHER_PKG_NODE_TARGET: node24.20.0
         run: npm run make -- --platform win32 --arch x64
 
       - name: Upload installer

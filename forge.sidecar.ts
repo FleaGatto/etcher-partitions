@@ -16,6 +16,13 @@ import { preparePkgNode } from './forge.pkg-node';
 
 const log = debug('sidecar');
 
+// Node.js version pkg builds the sidecar on. `node24` resolves to the version
+// pinned in forge.pkg-node.ts, which pkg-fetch has no prebuilt base binary for
+// (nor an expected hash of one), so it compiles Node.js from source: hours on
+// Windows. Set this to a version pkg-fetch ships a base binary for, e.g.
+// `node24.20.0`, to download that one instead.
+const PKG_NODE_TARGET = process.env.ETCHER_PKG_NODE_TARGET;
+
 function isStartScrpt(): boolean {
 	return process.env.npm_lifecycle_event === 'start';
 }
@@ -98,7 +105,7 @@ function build(
 				// always build for host platform and node version
 				// https://github.com/vercel/pkg-fetch/releases
 				'--target',
-				`node24-${arch}`,
+				`${PKG_NODE_TARGET ?? 'node24'}-${arch}`,
 				'--output',
 				binPath,
 			],
@@ -154,8 +161,12 @@ export class SidecarPlugin extends PluginBase<void> {
 			},
 			generateAssets: async (_config, platform, arch) => {
 				log('generateAssets', { platform, arch });
-				for (const buildArch of arch.split(',')) {
-					await preparePkgNode(buildArch);
+				// Only the pinned version needs preparing; an overridden target is
+				// one pkg-fetch already knows how to fetch.
+				if (PKG_NODE_TARGET === undefined) {
+					for (const buildArch of arch.split(',')) {
+						await preparePkgNode(buildArch);
+					}
 				}
 				build(SRC_DIR, arch, BIN_DIR, BIN_NAME);
 			},
